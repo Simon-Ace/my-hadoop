@@ -138,6 +138,13 @@ public interface YarnScheduler extends EventHandler<SchedulerEvent> {
    * @param decreaseRequests
    * @return the {@link Allocation} for the application
    */
+  /**
+   * AM 和资源调度器之间最主要的一个方法
+   * AM 通过该方法更新资源请求、待释放资源列表、黑名单列表增减
+   * increaseRequests、decreaseRequests 看起来像是更新 container 大小的参数？？
+   * 不对，点到 CapacityScheduler 中看，应该是 container 数量的增减
+   * FairScheduler 和 Fifo 中甚至不用这个参数？仅是给 Capacity 用的？
+   */
   @Public
   @Stable
   Allocation allocate(ApplicationAttemptId appAttemptId,

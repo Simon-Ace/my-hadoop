@@ -303,16 +303,19 @@ public class ResourceTrackerService extends AbstractService implements
   public RegisterNodeManagerResponse registerNodeManager(
       RegisterNodeManagerRequest request) throws YarnException,
       IOException {
+    // nm 节点信息 - ip、端口、资源、版本
     NodeId nodeId = request.getNodeId();
     String host = nodeId.getHost();
     int cmPort = nodeId.getPort();
     int httpPort = request.getHttpPort();
+    // 得到汇报的资源信息
     Resource capability = request.getResource();
     String nodeManagerVersion = request.getNMVersion();
 
     RegisterNodeManagerResponse response = recordFactory
         .newRecordInstance(RegisterNodeManagerResponse.class);
 
+    // 检查版本
     if (!minimumNodeManagerVersion.equals("NONE")) {
       if (minimumNodeManagerVersion.equals("EqualToRM")) {
         minimumNodeManagerVersion = YarnVersionInfo.getVersion();
@@ -377,11 +380,14 @@ public class ResourceTrackerService extends AbstractService implements
     response.setNMTokenMasterKey(nmTokenSecretManager
         .getCurrentKey());
 
+    // 根据 nm 汇报的信息，生成新的 RMNode 节点
     RMNode rmNode = new RMNodeImpl(nodeId, rmContext, host, cmPort, httpPort,
         resolve(host), capability, nodeManagerVersion);
 
+    // 放入到 RMNodes 列表中管理
     RMNode oldNode = this.rmContext.getRMNodes().putIfAbsent(nodeId, rmNode);
     if (oldNode == null) {
+      // 发送 RMNodeEventType.STARTED 事件
       this.rmContext.getDispatcher().getEventHandler().handle(
               new RMNodeStartedEvent(nodeId, request.getNMContainerStatuses(),
                   request.getRunningApplications()));
@@ -540,6 +546,7 @@ public class ResourceTrackerService extends AbstractService implements
         YarnServerBuilderUtils.newNodeHeartbeatResponse(
             getNextResponseId(lastNodeHeartbeatResponse.getResponseId()),
             NodeAction.NORMAL, null, null, null, null, nextHeartBeatInterval);
+    // 这里会 set 待释放的 container、application 列表
     rmNode.setAndUpdateNodeHeartbeatResponse(nodeHeartBeatResponse);
 
     populateKeys(request, nodeHeartBeatResponse);

@@ -210,6 +210,7 @@ public abstract class RMStateStore extends AbstractService {
       LOG.info("Storing info for app: " + appId);
       try {
         store.storeApplicationStateInternal(appId, appState);
+        // 这里发送了 RMAppEventType.APP_NEW_SAVED 事件
         store.notifyApplication(new RMAppEvent(appId,
                RMAppEventType.APP_NEW_SAVED));
       } catch (Exception e) {

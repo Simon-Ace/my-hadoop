@@ -299,12 +299,17 @@ public class IntraQueueCandidatesSelector extends PreemptionCandidatesSelector {
         LeafQueue leafQueue = tq.leafQueue;
 
         // skip if its parent queue
+        // 这里看着会有点歧义。
+        // 叶子队列类型是 LeafQueue；
+        // 父队列类型是 ParentQueue，其保存子队列的属性是 childQueues
+        // 在 TempQueuePerPartition 中如果有 leafQueue 属性，证明是叶子队列，否则是父队列不做处理。
         if (null == leafQueue) {
           continue;
         }
 
         // 3. Consider reassignableResource as (used - actuallyToBePreempted).
         // This provides as upper limit to split apps quota in a queue.
+        // todo tq.getActuallyToBePreempted() 是怎么计算的来的？？
         Resource queueReassignableResource = Resources.subtract(tq.getUsed(),
             tq.getActuallyToBePreempted());
 

@@ -316,11 +316,13 @@ public class ProportionalCapacityPreemptionPolicy
             && preemptionCandidates.get(container) + maxWaitTime < clock
             .getTime()) {
           // kill it
+          // 之前已经发送 preempt 请求，且超过的等待时间，会发送 KILL 事件，直接干掉
           rmContext.getDispatcher().getEventHandler().handle(
               new ContainerPreemptEvent(appAttemptId, container,
                   SchedulerEventType.MARK_CONTAINER_FOR_KILLABLE));
           preemptionCandidates.remove(container);
         } else {
+          // 已经发送过 PREEMPT 事件，就先等待
           if (preemptionCandidates.get(container) != null) {
             // We already updated the information to scheduler earlier, we need
             // not have to raise another event.
@@ -328,6 +330,7 @@ public class ProportionalCapacityPreemptionPolicy
           }
 
           //otherwise just send preemption events
+          // 未发送 PREEMPT 事件，就发送
           rmContext.getDispatcher().getEventHandler().handle(
               new ContainerPreemptEvent(appAttemptId, container,
                   SchedulerEventType.MARK_CONTAINER_FOR_PREEMPTION));
@@ -429,6 +432,10 @@ public class ProportionalCapacityPreemptionPolicy
             .format("Trying to use {0} to select preemption candidates",
                 selector.getClass().getName()));
       }
+      // 如果是ProportionalCapacityPreemptionPolicy，对应的实现是 IntraQueueCandidatesSelector
+      // toPreempt 将把选出的 container 放到这里；
+      // clusterResources 当前整体资源（这个是不分区的资源么？还是已经到某一个分区了？）（看注释像是整个集群的资源，但是类中又没有分区信息，怎么做各分区内处理的？）；
+      // totalPreemptionAllowed 计算得到的最大可 preempt 量
       toPreempt = selector.selectCandidates(toPreempt,
           clusterResources, totalPreemptionAllowed);
     }

@@ -77,6 +77,7 @@ public class FifoSchedulerInfo extends SchedulerInfo {
     this.totalNodeCapacity = 0;
     this.numContainers = 0;
 
+    // Mark：web 展示信息获取来源
     for (RMNode ni : rmContext.getRMNodes().values()) {
       SchedulerNodeReport report = fs.getNodeReport(ni.getNodeID());
       this.usedNodeCapacity += report.getUsedResource().getMemorySize();

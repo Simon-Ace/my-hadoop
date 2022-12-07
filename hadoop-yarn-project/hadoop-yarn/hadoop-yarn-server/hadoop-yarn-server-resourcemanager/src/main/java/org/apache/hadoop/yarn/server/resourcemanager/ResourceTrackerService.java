@@ -547,6 +547,7 @@ public class ResourceTrackerService extends AbstractService implements
             getNextResponseId(lastNodeHeartbeatResponse.getResponseId()),
             NodeAction.NORMAL, null, null, null, null, nextHeartBeatInterval);
     // 这里会 set 待释放的 container、application 列表
+    // 为何只有待释放的列表呢？分配的资源不返回么？ - 分配的资源是和 AM 进行交互的
     rmNode.setAndUpdateNodeHeartbeatResponse(nodeHeartBeatResponse);
 
     populateKeys(request, nodeHeartBeatResponse);

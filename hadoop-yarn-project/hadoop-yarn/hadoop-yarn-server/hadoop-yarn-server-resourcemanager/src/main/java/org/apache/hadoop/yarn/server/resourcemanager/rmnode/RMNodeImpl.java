@@ -91,6 +91,8 @@ import com.google.common.annotations.VisibleForTesting;
  * running on a node.
  *
  */
+// 每个 nm 节点都会生成一个 RMNodeImpl 实例，记录该 nm 的信息。
+// 也是一个事件处理器 & 状态机
 @Private
 @Unstable
 @SuppressWarnings("unchecked")

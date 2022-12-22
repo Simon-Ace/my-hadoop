@@ -187,6 +187,7 @@ public class RMAppImpl implements RMApp, Recoverable {
 
   Object transitionTodo;
 
+  // 状态机定义部分
   private static final StateMachineFactory<RMAppImpl,
                                            RMAppState,
                                            RMAppEventType,
@@ -877,6 +878,7 @@ public class RMAppImpl implements RMApp, Recoverable {
   private void
       createAndStartNewAttempt(boolean transferStateFromPreviousAttempt) {
     createNewAttempt();
+    // 这里发送 RMAppAttemptEventType.START 事件
     handler.handle(new RMAppStartAttemptEvent(currentAttempt.getAppAttemptId(),
       transferStateFromPreviousAttempt));
   }
@@ -1034,6 +1036,7 @@ public class RMAppImpl implements RMApp, Recoverable {
       RMAppTransition {
     @Override
     public void transition(RMAppImpl app, RMAppEvent event) {
+      // 这里发送了 SchedulerEventType.APP_ADDED 事件
       app.handler.handle(new AppAddedSchedulerEvent(app.user,
           app.submissionContext, false));
       // send the ATS create Event

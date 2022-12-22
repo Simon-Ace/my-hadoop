@@ -967,6 +967,7 @@ public class CapacityScheduler extends
     }
 
     // Release containers
+    // 发送 RMContainerEventType.RELEASED
     releaseContainers(release, application);
 
     // update increase requests
@@ -977,6 +978,7 @@ public class CapacityScheduler extends
     decreaseContainers(decreaseRequests, application);
 
     // Sanity check for new allocation requests
+    // 会将资源请求进行规范化，限制到最小和最大区间内，并且规范到最小增长量上
     SchedulerUtils.normalizeRequests(
         ask, getResourceCalculator(), getClusterResource(),
         getMinimumResourceCapability(), getMaximumResourceCapability());
@@ -1000,6 +1002,7 @@ public class CapacityScheduler extends
         }
 
         // Update application requests
+        // 将新的资源需求更新到对应的数据结构中
         if (application.updateResourceRequests(ask)
             && (updateDemandForQueue == null)) {
           updateDemandForQueue = (LeafQueue) application.getQueue();
@@ -1013,6 +1016,7 @@ public class CapacityScheduler extends
 
       application.updateBlacklist(blacklistAdditions, blacklistRemovals);
 
+      // 获取已经为该应用程序分配的资源
       allocation = application.getAllocation(getResourceCalculator(),
                    clusterResource, getMinimumResourceCapability());
     }

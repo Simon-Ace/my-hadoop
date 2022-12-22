@@ -144,6 +144,10 @@ public interface YarnScheduler extends EventHandler<SchedulerEvent> {
    * increaseRequests、decreaseRequests 看起来像是更新 container 大小的参数？？
    * 不对，点到 CapacityScheduler 中看，应该是 container 数量的增减
    * FairScheduler 和 Fifo 中甚至不用这个参数？仅是给 Capacity 用的？
+   *
+   * <increaseRequests、decreaseRequests> 是在 ApplicationMasterService#allocate 中设置的
+   * RMServerUtils.validateAndSplitUpdateResourceRequests 比较 container 目标资源和当前资源
+   * 看起来动态调整 container 资源量大小用的
    */
   @Public
   @Stable

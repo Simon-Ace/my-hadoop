@@ -229,6 +229,7 @@ public class ApplicationMasterService extends AbstractService implements
         .getDispatcher()
         .getEventHandler()
         .handle(
+          // 这里发送 RMAppAttemptEventType.REGISTERED 事件
           new RMAppAttemptRegistrationEvent(applicationAttemptId, request
             .getHost(), request.getRpcPort(), request.getTrackingUrl()));
       RMAuditLogger.logSuccess(app.getUser(), AuditConstants.REGISTER_AM,
@@ -440,6 +441,7 @@ public class ApplicationMasterService extends AbstractService implements
       }
 
       // Send the status update to the appAttempt.
+      // 发送 RMAppAttemptEventType.STATUS_UPDATE 事件
       this.rmContext.getDispatcher().getEventHandler().handle(
           new RMAppAttemptStatusupdateEvent(appAttemptId, request
               .getProgress()));
@@ -502,6 +504,7 @@ public class ApplicationMasterService extends AbstractService implements
       // Split Update Resource Requests into increase and decrease.
       // No Exceptions are thrown here. All update errors are aggregated
       // and returned to the AM.
+      // 将资源申请分割（动态调整 container 资源量）
       List<UpdateContainerRequest> increaseResourceReqs = new ArrayList<>();
       List<UpdateContainerRequest> decreaseResourceReqs = new ArrayList<>();
       List<UpdateContainerError> updateContainerErrors =
@@ -520,6 +523,8 @@ public class ApplicationMasterService extends AbstractService implements
                  " state, ignore container allocate request.");
         allocation = EMPTY_ALLOCATION;
       } else {
+        // 调用 ResourceScheduler#allocate 函数，将该 AM 资源需求汇报给 ResourceScheduler
+        // （实际是 Capacity、Fair、Fifo 等实际指定的 Scheduler 处理）
         allocation =
             this.rScheduler.allocate(appAttemptId, ask, release,
                 blacklistAdditions, blacklistRemovals,

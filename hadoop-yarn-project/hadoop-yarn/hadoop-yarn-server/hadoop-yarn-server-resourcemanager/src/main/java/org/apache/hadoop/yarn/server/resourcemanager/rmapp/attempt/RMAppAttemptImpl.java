@@ -1019,6 +1019,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
       // Add the applicationAttempt to the scheduler and inform the scheduler
       // whether to transfer the state from previous attempt.
+      // 发送 SchedulerEventType.APP_ATTEMPT_ADDED 事件，由 AbstractYarnScheduler 实现类处理
       appAttempt.eventHandler.handle(new AppAttemptAddedSchedulerEvent(
         appAttempt.applicationAttemptId, transferStateFromPreviousAttempt));
     }
@@ -1063,6 +1064,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
               amBlacklist.getBlacklistRemovals() + ")");
         }
         // AM resource has been checked when submission
+        // todo 这里的 allocate 和下面的 allocate 有啥区别？？
         Allocation amContainerAllocation =
             appAttempt.scheduler.allocate(
                 appAttempt.applicationAttemptId,
@@ -1090,6 +1092,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     public RMAppAttemptState transition(RMAppAttemptImpl appAttempt,
         RMAppAttemptEvent event) {
       // Acquire the AM container from the scheduler.
+      // todo 这里的 allocate 和上面的 allocate 有啥区别？？
       Allocation amContainerAllocation =
           appAttempt.scheduler.allocate(appAttempt.applicationAttemptId,
             EMPTY_CONTAINER_REQUEST_LIST, EMPTY_CONTAINER_RELEASE_LIST, null,
@@ -1615,6 +1618,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
       appAttempt.updateAMLaunchDiagnostics(null);
 
       // Let the app know
+      // 发送 RMAppEventType.ATTEMPT_REGISTERED 由 RMAppImpl 处理
       appAttempt.eventHandler.handle(new RMAppEvent(appAttempt
           .getAppAttemptId().getApplicationId(),
           RMAppEventType.ATTEMPT_REGISTERED));

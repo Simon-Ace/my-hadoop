@@ -450,6 +450,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
           + ", " + nodeHealthStatus.getHealthReport());
     }
     List<ContainerStatus> containersStatuses = getContainerStatuses();
+    // todo 又看到了 getContainersUtilization 到底是如何启用的呀
     ResourceUtilization containersUtilization = getContainersUtilization();
     ResourceUtilization nodeUtilization = getNodeUtilization();
     List<org.apache.hadoop.yarn.api.records.Container> increasedContainers
@@ -763,6 +764,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
               }
             }
 
+            // 发送 nm 的心跳
             response = resourceTracker.nodeHeartbeat(request);
             //get next heartbeat interval from response
             nextHeartBeatInterval = response.getNextHeartBeatInterval();

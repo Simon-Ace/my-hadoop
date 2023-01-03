@@ -366,6 +366,7 @@ public class CgroupsLCEResourcesHandler implements LCEResourcesHandler {
 
     if (isCpuWeightEnabled()) {
       int containerVCores = containerResource.getVirtualCores();
+      // 创建包含 Container 名称的 cgroup 文件目录，也就是说一个Container对应一个cgroup
       createCgroup(CONTROLLER_CPU, containerName);
       int cpuShares = CPU_DEFAULT_WEIGHT * containerVCores;
       updateCgroup(CONTROLLER_CPU, containerName, "shares",

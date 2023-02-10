@@ -416,7 +416,8 @@ public class ParentQueue extends AbstractCSQueue {
     
     CSAssignment assignment = 
         new CSAssignment(Resources.createResource(0, 0), NodeType.NODE_LOCAL);
-    
+
+    // node 没有预留容器 & 有可分配资源
     while (canAssign(clusterResource, node)) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Trying to assign containers to child-queue of "
@@ -434,6 +435,7 @@ public class ParentQueue extends AbstractCSQueue {
       }
       
       // Schedule
+      // 将资源分配给子队列
       CSAssignment assignedToChild =
           assignContainersToChildQueues(clusterResource, node, resourceLimits,
               schedulingMode);
@@ -586,6 +588,7 @@ public class ParentQueue extends AbstractCSQueue {
     printChildQueues();
 
     // Try to assign to most 'under-served' sub-queue
+    // 已分配资源 / 配置资源
     for (Iterator<CSQueue> iter = sortAndGetChildrenAllocationIterator(node); iter
         .hasNext();) {
       CSQueue childQueue = iter.next();
@@ -597,7 +600,8 @@ public class ParentQueue extends AbstractCSQueue {
       // Get ResourceLimits of child queue before assign containers
       ResourceLimits childLimits =
           getResourceLimitsOfChild(childQueue, cluster, parentLimits, node.getPartition());
-      
+
+      // 这里开始递归，assignContainers 有 ParentQueue 和 LeafQueue 两种实现。直接到 LeafQueue 看实现
       CSAssignment childAssignment = childQueue.assignContainers(cluster, node,
           childLimits, schedulingMode);
       if(LOG.isDebugEnabled()) {

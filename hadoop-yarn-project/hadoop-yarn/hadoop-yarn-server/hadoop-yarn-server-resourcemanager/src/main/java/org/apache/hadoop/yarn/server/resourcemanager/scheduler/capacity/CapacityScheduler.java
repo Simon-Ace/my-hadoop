@@ -1248,6 +1248,7 @@ public class CapacityScheduler extends
     // 1. Check for reserved applications
     // 2. Schedule if there are no reservations
 
+    // 这个 reservedContainer 应该指的是上一次资源分配，未能分配资源的 container
     RMContainer reservedContainer = node.getReservedContainer();
     if (reservedContainer != null) {
       FiCaSchedulerApp reservedApplication =
@@ -1282,8 +1283,10 @@ public class CapacityScheduler extends
       }
     }
 
+    // 把之前预留的容器资源都分配完之后，开始处理新的资源请求
     // Try to schedule more if there are no reservations to fulfill
     if (node.getReservedContainer() == null) {
+      // 节点上能分配的资源 / 单个 container 资源
       if (calculator.computeAvailableContainers(Resources
               .add(node.getAvailableResource(), node.getTotalKillableResources()),
           minimumAllocation) > 0) {
@@ -1292,6 +1295,8 @@ public class CapacityScheduler extends
               ", available: " + node.getAvailableResource());
         }
 
+        // 几个参数：集群资源、nm 节点、资源池资源、非共享资源标识
+        // 这里会先走到 ParentQueue 的 assignContainers()
         assignment = root.assignContainers(
             clusterResource,
             node,
@@ -1385,6 +1390,7 @@ public class CapacityScheduler extends
       NodeUpdateSchedulerEvent nodeUpdatedEvent = (NodeUpdateSchedulerEvent)event;
       RMNode node = nodeUpdatedEvent.getRMNode();
       setLastNodeUpdateTime(Time.now());
+      // 更新节点中 container 资源状态
       nodeUpdate(node);
       if (!scheduleAsynchronously) {
         allocateContainersToNode(getNode(node.getNodeID()));

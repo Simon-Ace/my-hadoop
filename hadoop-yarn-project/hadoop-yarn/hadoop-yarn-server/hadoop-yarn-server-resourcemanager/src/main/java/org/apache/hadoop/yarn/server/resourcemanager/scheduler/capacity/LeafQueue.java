@@ -968,6 +968,7 @@ public class LeafQueue extends AbstractCSQueue {
   public CSAssignment assignContainers(Resource clusterResource,
       FiCaSchedulerNode node, ResourceLimits currentResourceLimits,
       SchedulingMode schedulingMode) {
+    // 这里是从 ParentQueue 递归处理的。选择 queue 的逻辑是 most under served queue
     FiCaSchedulerApp reservedApp = null;
     CSAssignment reservedCSAssignment = null;
 
@@ -983,11 +984,13 @@ public class LeafQueue extends AbstractCSQueue {
       setPreemptionAllowed(currentResourceLimits, node.getPartition());
 
       // Check for reserved resources
+      // 先给预留的容器分配资源
       RMContainer reservedContainer = node.getReservedContainer();
       if (reservedContainer != null) {
         reservedApp = getApplication(
             reservedContainer.getApplicationAttemptId());
         synchronized (reservedApp) {
+          // 这里到 Application 级别 assignContainers()
           reservedCSAssignment = reservedApp.assignContainers(
               clusterResource, node, currentResourceLimits, schedulingMode,
               reservedContainer);
@@ -1004,6 +1007,7 @@ public class LeafQueue extends AbstractCSQueue {
       return reservedCSAssignment;
     }
 
+    // 处理未预留的资源请求
     synchronized (this) {
       // if our queue cannot access this node, just return
       if (schedulingMode == SchedulingMode.RESPECT_PARTITION_EXCLUSIVITY

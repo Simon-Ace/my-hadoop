@@ -78,10 +78,12 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
         required);
   }
 
-  
+
+  // 检查各种不符合分配条件的情况
   private ContainerAllocation preCheckForNewContainer(Resource clusterResource,
       FiCaSchedulerNode node, SchedulingMode schedulingMode,
       ResourceLimits resourceLimits, Priority priority) {
+    // 先做了一堆的检查
     if (SchedulerAppUtils.isPlaceBlacklisted(application, node, LOG)) {
       application.updateAppSkipNodeDiagnostics(
           CSAMContainerLaunchDiagnosticsConstants.SKIP_AM_ALLOCATION_IN_BLACK_LISTED_NODE);
@@ -179,6 +181,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     return null;
   }
 
+  // 预分配，标识状态，但不实际分配资源
   ContainerAllocation preAllocation(Resource clusterResource,
       FiCaSchedulerNode node, SchedulingMode schedulingMode,
       ResourceLimits resourceLimits, Priority priority,
@@ -186,6 +189,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     ContainerAllocation result;
     if (null == reservedContainer) {
       // pre-check when allocating new container
+      // 检查各种不符合分配条件的情况，返回值为 null 表示可以继续分配
       result =
           preCheckForNewContainer(clusterResource, node, schedulingMode,
               resourceLimits, priority);
@@ -202,6 +206,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     }
 
     // Try to allocate containers on node
+    // 根据节点机架情况去实际分配资源。里面三种情况，该节点不能分配的 XXX_SKIPPED，能分配且有资源 ALLOCATED，能分配暂时没资源 RESERVED
     result =
         assignContainersOnNode(clusterResource, node, priority,
             reservedContainer, schedulingMode, resourceLimits);
@@ -333,6 +338,10 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
 
     ContainerAllocation allocation;
 
+    // 后面分三种情况，Data-local、Rack-local、Off-switch，一个 node 只会属于一种机架策略（应该吧？）
+    // 每个里面实际都是 assignContainer()，
+    // 在 assignContainer 中，不符合这个节点的选择条件会设置一个不符合的 PRIORITY，继续往下找
+    // 符合条件，如果有资源直接 ALLOCATED，如果暂时没资源就 RESERVED。这两种情况就不再继续往下找了。
     NodeType requestType = null;
     // Data-local
     ResourceRequest nodeLocalResourceRequest =
@@ -403,6 +412,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     return ContainerAllocation.PRIORITY_SKIPPED;
   }
 
+  // container 级别分配资源
   private ContainerAllocation assignContainer(Resource clusterResource,
       FiCaSchedulerNode node, Priority priority, ResourceRequest request,
       NodeType type, RMContainer rmContainer, SchedulingMode schedulingMode,
@@ -430,6 +440,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     Resource available = node.getAvailableResource();
     Resource totalResource = node.getTotalResource();
 
+    // 需求的如果比整个 nm 能提供的还大，则跳过这个 nm
     if (!Resources.lessThanOrEqual(rc, clusterResource,
         capability, totalResource)) {
       LOG.warn("Node : " + node.getNodeID()
@@ -443,6 +454,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
         priority, capability);
 
     // Can we allocate a container on this node?
+    // available / required  =0 表示资源不够
     long availableContainers =
         rc.computeAvailableContainers(available, capability);
 
@@ -462,6 +474,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
         application.getCSLeafQueue().getReservationContinueLooking();
 
     // Check if we need to kill some containers to allocate this one
+    // 是否能 kill 一些容器来满足需求
     List<RMContainer> toKillContainers = null;
     if (availableContainers == 0 && currentResoureLimits.isAllowPreemption()) {
       Resource availableAndKillable = Resources.clone(available);
@@ -484,6 +497,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
       }
     }
 
+    // 如果有能分配的容器资源，就分配
     if (availableContainers > 0) {
       // Allocate...
       // We will only do continuous reservation when this is not allocated from
@@ -526,6 +540,10 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
       result.setToKillContainers(toKillContainers);
       return result;
     } else {
+      // 如果没有足够的资源，则把这个 container 置为 RESERVED 状态
+      // RESERVED 是为了防止容器饿死。
+      // 传统调度：比如一堆 1G 和 2G 的容器请求，当前集群全被 1G 的占满了，当一个 1G 的容器完成后，下一个还是会调度 1G，因为 2G 资源不够。
+      // RESERVED 就是为了防止这种情况发生，所以先把这个资源预留出来，谁也别用，等下次有资源了再补上，直到满足这个容器资源请求。
       // if we are allowed to allocate but this node doesn't have space, reserve
       // it or if this was an already a reserved container, reserve it again
       if (shouldAllocOrReserveNewContainer || rmContainer != null) {
@@ -554,6 +572,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     }
   }
 
+  // todo 不是特别明白逻辑，大意是看当前节点能不能满足容器资源需求（比如防止资源需求特别大，该节点很难分配出来，导致饿死的情况）
   boolean
       shouldAllocOrReserveNewContainer(Priority priority, Resource required) {
     int requiredContainers = application.getTotalRequiredResources(priority);
@@ -699,16 +718,20 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
     return allocationResult;
   }
 
+  // 三种状态，未满足条件、分配、预留
   private ContainerAllocation allocate(Resource clusterResource,
       FiCaSchedulerNode node, SchedulingMode schedulingMode,
       ResourceLimits resourceLimits, Priority priority,
       RMContainer reservedContainer) {
+    // 预分配，标识状态，但不实际分配资源
     ContainerAllocation result =
         preAllocation(clusterResource, node, schedulingMode, resourceLimits,
             priority, reservedContainer);
 
+    // ALLOCATED 和 RESERVED 就可以实际分配资源了
     if (AllocationState.ALLOCATED == result.state
         || AllocationState.RESERVED == result.state) {
+      // ALLOCATED 就分个容器出来，RESERVED 就还是暂预留
       result = doAllocation(result, node, priority, reservedContainer);
     }
 
@@ -720,6 +743,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
       FiCaSchedulerNode node, SchedulingMode schedulingMode,
       ResourceLimits resourceLimits,
       RMContainer reservedContainer) {
+    // 如果没有预留的 container
     if (reservedContainer == null) {
       // Check if application needs more resource, skip if it doesn't need more.
       if (!application.hasPendingResourceRequest(rc,
@@ -733,6 +757,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
       }
       
       // Schedule in priority order
+      // todo application 怎么还能有多个优先级呢？（和任务提交时设置的优先级不是一个概念）
       for (Priority priority : application.getPriorities()) {
         ContainerAllocation result =
             allocate(clusterResource, node, schedulingMode, resourceLimits,
@@ -750,6 +775,7 @@ public class RegularContainerAllocator extends AbstractContainerAllocator {
       // skip the app.
       return CSAssignment.SKIP_ASSIGNMENT;
     } else {
+      // 有之前预留的 container，则先满足这个
       ContainerAllocation result =
           allocate(clusterResource, node, schedulingMode, resourceLimits,
               reservedContainer.getReservedPriority(), reservedContainer);

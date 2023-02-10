@@ -113,13 +113,24 @@ public class TempQueuePerPartition extends AbstractPreemptionEntity {
 
   // This function "accepts" all the resources it can (pending) and return
   // the unused ones
+  // 分配中的重点函数
+  // 主要用来设置各队列idealAssigned，即资源重分配过后，每个队列的理想最低资源分配量
+  /**
+   * 计算队列 idealAssigned，在原有基础上增加新分配的资源。同时返回 avail 中未使用的资源。
+   * 参数说明：
+   * avail 按比例该队列能从剩余资源中分配到的
+   * clusterResource 整体资源量
+   * considersReservedResource ？
+   * idealAssigned = min(使用量，配置量)
+   */
   Resource offer(Resource avail, ResourceCalculator rc,
       Resource clusterResource, boolean considersReservedResource) {
+    // 计算的是还有多少可分配资源的空间（ maxCapacity - assigned ）
     Resource absMaxCapIdealAssignedDelta = Resources.componentwiseMax(
         Resources.subtract(getMax(), idealAssigned),
         Resource.newInstance(0, 0));
-    // remain = avail - min(avail, (max - assigned), (current + pending -
-    // assigned))
+    // remain = avail - min(avail, (max - assigned), (current + pending - assigned))
+    // 队列接受资源的计算方法：可提供的资源，队列最大资源-已分配资源，当前已使用资源+未满足的资源-min(使用量，配置量) 三者中的最小值。
     Resource accepted = Resources.min(rc, clusterResource,
         absMaxCapIdealAssignedDelta,
         Resources.min(rc, clusterResource, avail, Resources

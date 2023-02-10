@@ -725,10 +725,13 @@ public class ResourceManager extends CompositeService implements Recoverable {
     }
 
     protected void createPolicyMonitors() {
+      // 只有 capacity scheduler 实现了 PreemptableResourceScheduler 接口，fair 是如何实现资源抢占的？
       if (scheduler instanceof PreemptableResourceScheduler
           && conf.getBoolean(YarnConfiguration.RM_SCHEDULER_ENABLE_MONITORS,
           YarnConfiguration.DEFAULT_RM_SCHEDULER_ENABLE_MONITORS)) {
         LOG.info("Loading policy monitors");
+        // 是否配置了 scheduler.monitor.policies
+        // 默认值是 ProportionalCapacityPreemptionPolicy？ 代码中没看到默认值，但是 yarn-site.xml doc 中有默认值
         List<SchedulingEditPolicy> policies = conf.getInstances(
             YarnConfiguration.RM_SCHEDULER_MONITOR_POLICIES,
             SchedulingEditPolicy.class);
@@ -737,6 +740,10 @@ public class ResourceManager extends CompositeService implements Recoverable {
             LOG.info("LOADING SchedulingEditPolicy:" + policy.getPolicyName());
             // periodically check whether we need to take action to guarantee
             // constraints
+            // 此处创建了资源抢占服务类。
+            // 当此服务启动时，会启动一个线程每隔 PREEMPTION_MONITORING_INTERVAL（默认 3s）调用一次
+            // ProportionalCapacityPreemptionPolicy 类中的 editSchedule方法，
+            // 在此方法中实现了具体的资源抢占逻辑。
             SchedulingMonitor mon = new SchedulingMonitor(rmContext, policy);
             addService(mon);
           }

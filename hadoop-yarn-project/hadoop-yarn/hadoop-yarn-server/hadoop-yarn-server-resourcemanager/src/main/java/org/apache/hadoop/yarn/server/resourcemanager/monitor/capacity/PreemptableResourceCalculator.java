@@ -70,6 +70,8 @@ public class PreemptableResourceCalculator
    * @param totalPreemptionAllowed total amount of preemption we allow
    * @param tot_guarant the amount of capacity assigned to this pool of queues
    */
+  // 按照各队列用量和需求量，重新计算各队列资源分配
+  // 超出重分配量的资源就是要被抢占的资源量
   private void computeIdealResourceDistribution(ResourceCalculator rc,
       List<TempQueuePerPartition> queues, Resource totalPreemptionAllowed,
       Resource tot_guarant) {
@@ -79,12 +81,14 @@ public class PreemptableResourceCalculator
     List<TempQueuePerPartition> qAlloc = new ArrayList<>(queues);
     // unassigned tracks how much resources are still to assign, initialized
     // with the total capacity for this set of queues
+    // 当前子队列所在父队列能够被保证的资源量（absCapacity），所谓资源抢占只是重新分配各子队列最低资源保证
     Resource unassigned = Resources.clone(tot_guarant);
 
     // group queues based on whether they have non-zero guaranteed capacity
     Set<TempQueuePerPartition> nonZeroGuarQueues = new HashSet<>();
     Set<TempQueuePerPartition> zeroGuarQueues = new HashSet<>();
 
+    // 选出队列配置量不是 0 的；队列配置为 0 的，可能是共享资源池的配置
     for (TempQueuePerPartition q : qAlloc) {
       if (Resources.greaterThan(rc, tot_guarant,
           q.getGuaranteed(), Resources.none())) {
@@ -95,6 +99,7 @@ public class PreemptableResourceCalculator
     }
 
     // first compute the allocation as a fixpoint based on guaranteed capacity
+    // （重点）计算并设置各子队列 idealAssigned。把剩余的资源分配给各队列，还有资源不满足的队列就放到 underServedQueues 中
     computeFixpointAllocation(tot_guarant, nonZeroGuarQueues, unassigned,
         false);
 
@@ -108,6 +113,8 @@ public class PreemptableResourceCalculator
 
     // based on ideal assignment computed above and current assignment we derive
     // how much preemption is required overall
+    // 计算总共要 Preempt 资源
+    // (重新分配的资源 - 已使用的资源) 就是要被抢占的资源
     Resource totPreemptionNeeded = Resource.newInstance(0, 0);
     for (TempQueuePerPartition t:queues) {
       if (Resources.greaterThan(rc, tot_guarant,
@@ -121,6 +128,7 @@ public class PreemptableResourceCalculator
      * if we need to preempt more than is allowed, compute a factor (0<f<1)
      * that is used to scale down how much we ask back from each queue
      */
+    // 平滑抢占，不是一下把超用的资源都干掉，每次只处理一部分。
     float scalingFactor = 1.0F;
     if (Resources.greaterThan(rc,
         tot_guarant, totPreemptionNeeded, totalPreemptionAllowed)) {
@@ -130,6 +138,7 @@ public class PreemptableResourceCalculator
 
     // assign to each queue the amount of actual preemption based on local
     // information of ideal preemption and scaling factor
+    // 计算每个队列计划要被 Preempt 量，即 toBePreempted
     for (TempQueuePerPartition t : queues) {
       t.assignPreemption(scalingFactor, rc, tot_guarant);
     }
@@ -145,11 +154,14 @@ public class PreemptableResourceCalculator
    * @param totalPreemptionAllowed maximum amount of preemption allowed
    * @return a list of leaf queues updated with preemption targets
    */
+  // 递归 重新计算各队列资源分配，同时给每个队列计算出了要 Preempt 量
   private void recursivelyComputeIdealAssignment(
       TempQueuePerPartition root, Resource totalPreemptionAllowed) {
     if (root.getChildren() != null &&
         root.getChildren().size() > 0) {
       // compute ideal distribution at this level
+      // root.idealAssigned 是 (totalPartitionResource * root.absCapacity)  也就是当前父队列被保证的资源
+      // 重新计算各队列资源分配，同时给每个队列计算出了要 Preempt 量
       computeIdealResourceDistribution(rc, root.getChildren(),
           totalPreemptionAllowed, root.idealAssigned);
       // compute recursively for lower levels and build list of leafs
@@ -159,6 +171,8 @@ public class PreemptableResourceCalculator
     }
   }
 
+  // 计算每个队列 preempt 量时有个阻尼因子，如果超量 20G，阻尼因子为 0.1
+  // 那么只会 preempt 20 GB * 0.1 = 2GB
   private void calculateResToObtainByPartitionForLeafQueues(
       Set<String> leafQueueNames, Resource clusterResource) {
     // Loop all leaf queues
@@ -177,6 +191,7 @@ public class PreemptableResourceCalculator
       for (TempQueuePerPartition qT : context.getQueuePartitions(queueName)) {
         // we act only if we are violating balance by more than
         // maxIgnoredOverCapacity
+        // 使用的比配置量大，就会被 preempt
         if (Resources.greaterThan(rc, clusterResource,
             qT.getUsed(), Resources
                 .multiply(qT.getGuaranteed(),
@@ -233,21 +248,27 @@ public class PreemptableResourceCalculator
     }
   }
 
+  // 计算每个队列实际要被 preempt 的量
   public void computeIdealAllocation(Resource clusterResource,
       Resource totalPreemptionAllowed) {
     for (String partition : context.getAllPartitions()) {
       TempQueuePerPartition tRoot = context.getQueueByPartition(
           CapacitySchedulerConfiguration.ROOT, partition);
+      // 这里计算好每个队列超出资源配置的部分，存在 TempQueuePerPartition
+      // preemptableExtra 表示可以被抢占的
+      // untouchableExtra 表示不可被抢占的（队列配置了不可抢占）
       updatePreemptableExtras(tRoot);
 
       // compute the ideal distribution of resources among queues
       // updates cloned queues state accordingly
       tRoot.idealAssigned = tRoot.getGuaranteed();
+      // 遍历队列树，重新计算资源分配，并计算出每个队列计划要 Preempt 的量
       recursivelyComputeIdealAssignment(tRoot, totalPreemptionAllowed);
     }
 
     // based on ideal allocation select containers to be preempted from each
     // calculate resource-to-obtain by partition for each leaf queues
+    // 计算实际每个队列要被 Preempt 的量 actuallyToBePreempted（有个阻尼因子，不会一下把所有超量的都干掉）
     calculateResToObtainByPartitionForLeafQueues(context.getLeafQueueNames(),
         clusterResource);
   }

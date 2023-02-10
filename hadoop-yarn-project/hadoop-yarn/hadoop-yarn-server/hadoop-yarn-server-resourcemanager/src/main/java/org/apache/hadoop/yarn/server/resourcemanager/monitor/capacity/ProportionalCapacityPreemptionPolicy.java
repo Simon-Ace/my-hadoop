@@ -119,6 +119,8 @@ public class ProportionalCapacityPreemptionPolicy
   // Internal properties to make decisions of what to preempt
   private final Map<RMContainer,Long> preemptionCandidates =
     new HashMap<>();
+
+  // Map<队列名, Map<资源池, 队列详情>>
   private Map<String, Map<String, TempQueuePerPartition>> queueToPartitions =
       new HashMap<>();
   private Map<String, LinkedHashSet<String>> partitionToUnderServedQueues =
@@ -286,7 +288,9 @@ public class ProportionalCapacityPreemptionPolicy
     long startTs = clock.getTime();
 
     CSQueue root = scheduler.getRootQueue();
+    // 获取集群当前资源快照
     Resource clusterResources = Resources.clone(scheduler.getClusterResource());
+    // 具体的资源抢占逻辑
     containerBasedPreemptOrKill(root, clusterResources);
 
     if (LOG.isDebugEnabled()) {
@@ -294,6 +298,7 @@ public class ProportionalCapacityPreemptionPolicy
     }
   }
 
+  // 发送 preempt 事件，或者超时直接 kill
   private void preemptOrkillSelectedContainerAfterWait(
       Map<ApplicationAttemptId, Set<RMContainer>> selectedCandidates) {
     if (LOG.isDebugEnabled()) {
@@ -391,10 +396,13 @@ public class ProportionalCapacityPreemptionPolicy
   private void containerBasedPreemptOrKill(CSQueue root,
       Resource clusterResources) {
     // Sync killable containers from scheduler when lazy preemption enabled
+    // 暂没看懂这里的目的，doc 中也没找到这个配置，集群中也没配置
     if (lazyPreempionEnabled) {
       syncKillableContainersFromScheduler();
     }
 
+
+    // ------------ 第一步 ------------ （生成资源快照）
     // All partitions to look at
     Set<String> partitions = new HashSet<>();
     partitions.addAll(scheduler.getRMContext()
@@ -403,21 +411,30 @@ public class ProportionalCapacityPreemptionPolicy
     this.allPartitions = ImmutableSet.copyOf(partitions);
 
     // extract a summary of the queues from scheduler
+    // 将所有队列信息拷贝到 queueToPartitions - Map<队列名, Map<资源池, 队列详情>>。生成快照，防止队列变化造成计算问题。
+    // 这里直接锁 scheduler 对性能是不是影响太大了？
     synchronized (scheduler) {
       queueToPartitions.clear();
 
       for (String partitionToLookAt : allPartitions) {
+        // clone 到了 queueToPartitions 中
+        // Map<String, Map<String, TempQueuePerPartition>> queueToPartitions
+        // Map<队列名, Map<资源池, 队列详情>>  -- 包含所有父队列和子队列
         cloneQueues(root, Resources
                 .clone(nlm.getResourceByLabel(partitionToLookAt, clusterResources)),
             partitionToLookAt);
       }
     }
 
+    // 获取所有子队列名
     this.leafQueueNames = ImmutableSet.copyOf(getLeafQueueNames(
         getQueueByPartition(CapacitySchedulerConfiguration.ROOT,
             RMNodeLabelsManager.NO_LABEL)));
 
+
+    // ------------ 第二步 ------------ （找出待抢占的容器）
     // compute total preemption allowed
+    // 计算 preemption 最大量（cpu 和 mem）
     Resource totalPreemptionAllowed = Resources.multiply(clusterResources,
         percentageClusterPreemptionAllowed);
 
@@ -425,6 +442,8 @@ public class ProportionalCapacityPreemptionPolicy
     // queue and each application
     Map<ApplicationAttemptId, Set<RMContainer>> toPreempt =
         new HashMap<>();
+    // candidatesSelectionPolicies 默认会放入 FifoCandidatesSelector，
+    // 如果配置了 INTRAQUEUE_PREEMPTION_ENABLED，会增加 IntraQueueCandidatesSelector
     for (PreemptionCandidatesSelector selector :
         candidatesSelectionPolicies) {
       if (LOG.isDebugEnabled()) {
@@ -432,10 +451,13 @@ public class ProportionalCapacityPreemptionPolicy
             .format("Trying to use {0} to select preemption candidates",
                 selector.getClass().getName()));
       }
-      // 如果是ProportionalCapacityPreemptionPolicy，对应的实现是 IntraQueueCandidatesSelector
-      // toPreempt 将把选出的 container 放到这里；
-      // clusterResources 当前整体资源（这个是不分区的资源么？还是已经到某一个分区了？）（看注释像是整个集群的资源，但是类中又没有分区信息，怎么做各分区内处理的？）；
-      // totalPreemptionAllowed 计算得到的最大可 preempt 量
+
+      /* 核心方法 计算待抢占 Container 放到 preemptMap
+       * 参数：
+       * toPreempt 将把选出的 container 放到这里
+       * clusterResources 当前整体资源
+       * totalPreemptionAllowed 计算得到的最大可 preempt 量
+       */
       toPreempt = selector.selectCandidates(toPreempt,
           clusterResources, totalPreemptionAllowed);
     }
@@ -445,10 +467,13 @@ public class ProportionalCapacityPreemptionPolicy
     }
 
     // if we are in observeOnly mode return before any action is taken
+    // 这里有个类似 dryrun 的参数 yarn.resourcemanager.monitor.capacity.preemption.observe_only
     if (observeOnly) {
       return;
     }
 
+
+    // ------------ 第三步 ------------ （执行容器资源抢占 或 kill超时未自动停止的容器）
     // TODO: need consider revert killable containers when no more demandings.
     // Since we could have several selectors to make decisions concurrently.
     // So computed ideal-allocation varies between different selectors.

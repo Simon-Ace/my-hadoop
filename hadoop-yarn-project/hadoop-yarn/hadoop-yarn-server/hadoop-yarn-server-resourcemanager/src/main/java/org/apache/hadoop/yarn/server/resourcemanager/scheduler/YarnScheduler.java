@@ -66,6 +66,7 @@ public interface YarnScheduler extends EventHandler<SchedulerEvent> {
    * @return queue information
    * @throws IOException
    */
+  // 获得一个队列的基本信息
   @Public
   @Stable
   public QueueInfo getQueueInfo(String queueName, boolean includeChildQueues,

@@ -36,6 +36,7 @@ public class CapacitySchedulerPreemptionUtils {
   public static Map<String, Resource> getResToObtainByPartitionForLeafQueue(
       CapacitySchedulerPreemptionContext context, String queueName,
       Resource clusterResource) {
+    // Map<partition, ActuallyToBePreempted> resToObtainByPartition
     Map<String, Resource> resToObtainByPartition = new HashMap<>();
     // compute resToObtainByPartition considered inter-queue preemption
     for (TempQueuePerPartition qT : context.getQueuePartitions(queueName)) {
@@ -171,6 +172,7 @@ public class CapacitySchedulerPreemptionUtils {
       }
 
       // Add to preemptMap
+      // 这里，将 Container 放到了待抢占的列表中
       addToPreemptMap(preemptMap, attemptId, rmContainer);
       return true;
     }

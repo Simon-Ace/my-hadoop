@@ -188,6 +188,7 @@ public class NMClientImpl extends NMClient {
       Map<String, ByteBuffer> allServiceResponse;
       ContainerManagementProtocolProxyData proxy = null;
       try {
+        // 获取 RPC 代理（stub）
         proxy =
             cmProxy.getProxy(container.getNodeId().toString(),
                 container.getId());
@@ -198,6 +199,7 @@ public class NMClientImpl extends NMClient {
         list.add(scRequest);
         StartContainersRequest allRequests =
             StartContainersRequest.newInstance(list);
+        // 重点：获取到 RPC 调用协议 ContainerManagementProtocol，并通过 RPC 函数 startContainers 启动 Container
         StartContainersResponse response =
             proxy
                 .getContainerManagementProtocol().startContainers(allRequests);

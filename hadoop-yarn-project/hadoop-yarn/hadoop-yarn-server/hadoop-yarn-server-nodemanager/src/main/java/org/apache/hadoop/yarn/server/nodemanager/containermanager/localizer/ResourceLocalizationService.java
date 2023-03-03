@@ -447,6 +447,7 @@ public class ResourceLocalizationService extends CompositeService
   private void handleInitApplicationResources(Application app) {
     // 0) Create application tracking structs
     String userName = app.getUser();
+    // 创建 LocalResourcesTrackerImpl 对象，为接下来的资源下载做准备
     privateRsrc.putIfAbsent(userName, new LocalResourcesTrackerImpl(userName,
         null, dispatcher, true, super.getConfig(), stateStore, dirsHandler));
     String appIdStr = app.getAppId().toString();
@@ -457,6 +458,7 @@ public class ResourceLocalizationService extends CompositeService
     //
     // This is handled by the ApplicationImpl state machine and allows
     // containers to proceed with launching.
+    // 向 ApplicationImpl 发送 ApplicationEventType.APPLICATION_INITED 事件
     dispatcher.getEventHandler().handle(new ApplicationInitedEvent(
           app.getAppId()));
   }
@@ -742,10 +744,14 @@ public class ResourceLocalizationService extends CompositeService
           (LocalizerResourceRequestEvent)event;
         switch (req.getVisibility()) {
         case PUBLIC:
+          // 如果是 PUBLIC 资源，则统一交给 PublicLocalizer 处理
           publicLocalizer.addResource(req);
           break;
         case PRIVATE:
         case APPLICATION:
+          // 检查是否已经为该 Container 创建了 LocalizerRunner 线程，
+          // 如果没有，则创建一个，
+          // 然后添加到该线程的下载队列中，该线程会调用 ContainerExecutor#startLocalizer() 函数下载资源
           synchronized (privLocalizers) {
             LocalizerRunner localizer = privLocalizers.get(locId);
             if (null == localizer) {
@@ -1156,6 +1162,8 @@ public class ResourceLocalizationService extends CompositeService
         writeCredentials(nmPrivateCTokensPath);
         // 2) exec initApplication and wait
         if (dirsHandler.areDisksHealthy()) {
+          // 调用 ContainerExecutor#startLocalizer() 函数下载资源
+          // 该函数通过协议 LocalizationProtocol 与 ResourceLocalizationService 通信，以顺序获取待下载资源位置下载
           exec.startLocalizer(new LocalizerStartContext.Builder()
               .setNmPrivateContainerTokens(nmPrivateCTokensPath)
               .setNmAddr(localizationServerAddress)

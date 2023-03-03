@@ -151,6 +151,10 @@ public class ContainerLaunch implements Callable<Integer> {
   @Override
   @SuppressWarnings("unchecked") // dispatcher not typed
   public Integer call() {
+    // 启动 Container 前的准备工作：
+    // 1.shell启动脚本的封装与拓展（添加自定义脚本）
+    // 2.创建本地工作目录
+    // 3.设置token的保存路径
     final ContainerLaunchContext launchContext = container.getLaunchContext();
     Map<Path,List<String>> localResources = null;
     ContainerId containerID = container.getContainerId();
@@ -283,6 +287,8 @@ public class ContainerLaunch implements Callable<Integer> {
 
       // LaunchContainer is a blocking call. We are here almost means the
       // container is launched, so send out the event.
+      // 注意上面的注释：（LaunchContainer is a blocking call）
+      // 发送 CONTAINER_LAUNCHED 事件 & START_MONITORING_CONTAINER 事件
       dispatcher.getEventHandler().handle(new ContainerEvent(
             containerID,
             ContainerEventType.CONTAINER_LAUNCHED));
@@ -295,6 +301,8 @@ public class ContainerLaunch implements Callable<Integer> {
         ret = ExitCode.TERMINATED.getExitCode();
       }
       else {
+        // 重点：调用 ContainerExecutor 对象启动 Container
+        // ContainerExecutor 由用户指定（DefaultContainerExecutor, LinuxContainerExecutor, DockerContainerExecutor）
         exec.activateContainer(containerID, pidFilePath);
         ret = exec.launchContainer(new ContainerStartContext.Builder()
             .setContainer(container)
@@ -324,6 +332,7 @@ public class ContainerLaunch implements Callable<Integer> {
       }
     }
 
+    // Container 执行结果返回，判断是否成功执行
     if (LOG.isDebugEnabled()) {
       LOG.debug("Container " + containerIdStr + " completed with exit code "
                 + ret);
@@ -348,6 +357,7 @@ public class ContainerLaunch implements Callable<Integer> {
       return ret;
     }
 
+    // 完成发送 CONTAINER_EXITED_WITH_SUCCESS 事件
     LOG.info("Container " + containerIdStr + " succeeded ");
     dispatcher.getEventHandler().handle(
         new ContainerEvent(containerID,

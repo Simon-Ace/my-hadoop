@@ -830,6 +830,7 @@ public class ApplicationMaster {
         // + ", containerToken"
         // +allocatedContainer.getContainerToken().getIdentifier().toString());
 
+        // 创建运行 Container 的 LaunchContainerRunnable 线程
         Thread launchThread = createLaunchContainerThread(allocatedContainer,
             yarnShellId);
 
@@ -838,6 +839,7 @@ public class ApplicationMaster {
         // as all containers may not be allocated at one go.
         launchThreads.add(launchThread);
         launchedContainers.add(allocatedContainer.getId());
+        // 启动 LaunchContainerRunnable 线程
         launchThread.start();
       }
     }
@@ -953,6 +955,7 @@ public class ApplicationMaster {
    * Thread to connect to the {@link ContainerManagementProtocol} and launch the container
    * that will execute the shell command.
    */
+  // 收到分配的 container 执行 launchThread.start()，执行的是这个线程
   private class LaunchContainerRunnable implements Runnable {
 
     // Allocated container
@@ -982,6 +985,7 @@ public class ApplicationMaster {
       LOG.info("Setting up container launch container for containerid="
           + container.getId() + " with shellid=" + shellId);
 
+      // 1. 构建 Container 的启动脚本
       // Set the local resources
       Map<String, LocalResource> localResources = new HashMap<String, LocalResource>();
 
@@ -1074,6 +1078,8 @@ public class ApplicationMaster {
         localResources, myShellEnv, commands, null, allTokens.duplicate(),
           null);
       containerListener.addContainer(container.getId(), container);
+
+      // 2. 重点：通过 NMClientAsync api 发送 ContainerEventType.START_CONTAINER 事件
       nmClientAsync.startContainerAsync(container, ctx);
     }
   }

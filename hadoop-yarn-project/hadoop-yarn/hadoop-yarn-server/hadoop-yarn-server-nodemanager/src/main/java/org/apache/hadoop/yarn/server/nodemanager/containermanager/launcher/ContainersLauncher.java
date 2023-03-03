@@ -112,10 +112,13 @@ public class ContainersLauncher extends AbstractService
           context.getApplications().get(
               containerId.getApplicationAttemptId().getApplicationId());
 
+        // LAUNCH_CONTAINER 事件的处理逻辑，创建 ContainerLaunch 线程并启动线程
         ContainerLaunch launch =
             new ContainerLaunch(context, getConfig(), dispatcher, exec, app,
               event.getContainer(), dirsHandler, containerManager);
+        // 提交到线程池
         containerLauncher.submit(launch);
+        // 将其加入到运行的 Container 数据结构 running 中
         running.put(containerId, launch);
         break;
       case RECOVER_CONTAINER:
@@ -127,6 +130,7 @@ public class ContainersLauncher extends AbstractService
         running.put(containerId, launch);
         break;
       case CLEANUP_CONTAINER:
+        // 将 Container 从正在运行 Container 列表中移除
         ContainerLaunch launcher = running.remove(containerId);
         if (launcher == null) {
           // Container not launched. So nothing needs to be done.
@@ -136,6 +140,7 @@ public class ContainersLauncher extends AbstractService
         // Cleanup a container whether it is running/killed/completed, so that
         // no sub-processes are alive.
         try {
+          // 清理 Container 占用的临时目录（kill进程，删除 pid 文件等）
           launcher.cleanupContainer();
         } catch (IOException e) {
           LOG.warn("Got exception while cleaning container " + containerId

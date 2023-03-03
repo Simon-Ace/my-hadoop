@@ -507,6 +507,7 @@ public class ContainerImpl implements Container {
       launcherEvent = ContainersLauncherEventType.RECOVER_CONTAINER;
     }
     containerLaunchStartTime = clock.getTime();
+    // 发送 ContainersLauncherEventType.LAUNCH_CONTAINER 事件
     dispatcher.getEventHandler().handle(
         new ContainersLauncherEvent(this, launcherEvent));
   }
@@ -587,6 +588,7 @@ public class ContainerImpl implements Container {
    * directly.
    */
   @SuppressWarnings("unchecked") // dispatcher not typed
+  // 收到 INIT_CONTAINER 事件的处理
   static class RequestResourcesTransition implements
       MultipleArcTransition<ContainerImpl,ContainerEvent,ContainerState> {
     @Override
@@ -686,6 +688,7 @@ public class ContainerImpl implements Container {
               new ContainerLocalizationRequestEvent(container, req));
         return ContainerState.LOCALIZING;
       } else {
+        // 重点：发送启动Container的操作
         container.sendLaunchEvent();
         container.metrics.endInitingContainer();
         return ContainerState.LOCALIZED;
@@ -817,11 +820,13 @@ public class ContainerImpl implements Container {
       // TODO: Add containerWorkDir to the deletion service.
 
       if (clCleanupRequired) {
+        // 向 ContainerLauncher 发送 ContainersLauncherEventType.CLEANUP_CONTAINER 清理事件
         container.dispatcher.getEventHandler().handle(
             new ContainersLauncherEvent(container,
                 ContainersLauncherEventType.CLEANUP_CONTAINER));
       }
 
+      // 向 ResourceLocalizationService 发送 LocalizationEventType.CLEANUP_CONTAINER_RESOURCES 清理事件
       container.cleanup();
     }
   }

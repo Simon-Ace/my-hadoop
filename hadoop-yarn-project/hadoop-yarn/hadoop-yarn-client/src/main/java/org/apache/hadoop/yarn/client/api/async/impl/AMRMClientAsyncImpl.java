@@ -254,7 +254,8 @@ extends AMRMClientAsync<T> {
                               List<String> blacklistRemovals) {
     client.updateBlacklist(blacklistAdditions, blacklistRemovals);
   }
-  
+
+  // AM 通过 RPC 函数 ApplicationMaster#allocate() 周期性向 RM 申请资源，并将申请到的资源保存在阻塞队列 responseQueue 中
   private class HeartbeatThread extends Thread {
     public HeartbeatThread() {
       super("AMRM Heartbeater thread");
@@ -270,6 +271,7 @@ extends AMRMClientAsync<T> {
           }
 
           try {
+            // 发心跳。发给 RM 当前的进度，从 RM 领取分配的 Container 及其他信息。
             response = client.allocate(progress);
           } catch (ApplicationAttemptNotFoundException e) {
             handler.onShutdownRequest();
@@ -285,6 +287,7 @@ extends AMRMClientAsync<T> {
           if (response != null) {
             while (true) {
               try {
+                // 将 RM 通过心跳返回的信息放到阻塞队列 responseQueue 中，等待处理
                 responseQueue.put(response);
                 break;
               } catch (InterruptedException ex) {
@@ -301,7 +304,8 @@ extends AMRMClientAsync<T> {
       }
     }
   }
-  
+
+  // AM 的处理线程。处理心跳返回的信息、更新执行进度
   private class CallbackHandlerThread extends Thread {
     public CallbackHandlerThread() {
       super("AMRM Callback Handler Thread");
@@ -320,6 +324,7 @@ extends AMRMClientAsync<T> {
             return;
           }
           try {
+            // 从 responseQueue 取出资源，对应心跳线程中 responseQueue.put(response)
             response = responseQueue.take();
           } catch (InterruptedException ex) {
             LOG.info("Interrupted while waiting for queue", ex);
@@ -347,11 +352,14 @@ extends AMRMClientAsync<T> {
             }
           }
 
+          // 重点：处理分配出来的 Container
           List<Container> allocated = response.getAllocatedContainers();
           if (!allocated.isEmpty()) {
+            // 到 ApplicationMaster#onContainersAllocated() 处理
             handler.onContainersAllocated(allocated);
           }
 
+          // 更新执行进度
           progress = handler.getProgress();
         } catch (Throwable ex) {
           handler.onError(ex);

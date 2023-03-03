@@ -160,6 +160,7 @@ public class NMClientAsyncImpl extends NMClientAsync {
 
         while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
           try {
+            // NMClientAsyncImpl 的 eventDispatcherThread 会不断处理 events 中的事件
             event = events.take();
           } catch (InterruptedException e) {
             if (!stopped.get()) {
@@ -196,6 +197,7 @@ public class NMClientAsyncImpl extends NMClientAsync {
 
           // the events from the queue are handled in parallel with a thread
           // pool
+          // 重点：getContainerEventProcessor(event) 返回一个 ContainerEventProcessor 线程对象，并在线程池中启动
           threadPool.execute(getContainerEventProcessor(event));
 
           // TODO: Group launching of multiple containers to a single
@@ -447,10 +449,12 @@ public class NMClientAsyncImpl extends NMClientAsync {
             scEvent = (StartContainerEvent) event;
           }
           assert scEvent != null;
+          // 重点：调用 NMClient 类的 startContainer() 启动 Container
           Map<String, ByteBuffer> allServiceResponse =
               container.nmClientAsync.getClient().startContainer(
                   scEvent.getContainer(), scEvent.getContainerLaunchContext());
           try {
+            // 通过回调的方式更新 Container 状态
             container.nmClientAsync.getCallbackHandler().onContainerStarted(
                 containerId, allServiceResponse);
           } catch (Throwable thr) {

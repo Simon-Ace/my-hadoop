@@ -255,6 +255,7 @@ public class ApplicationImpl implements Application {
       app.aclsManager.addApplication(app.getAppId(), app.applicationACLs);
       // Inform the logAggregator
       app.logAggregationContext = initEvent.getLogAggregationContext();
+      // 发送事件 LogHandlerEventType.APPLICATION_STARTED
       app.dispatcher.getEventHandler().handle(
           new LogHandlerAppStartedEvent(app.appId, app.user,
               app.credentials, app.applicationACLs,
@@ -322,6 +323,7 @@ public class ApplicationImpl implements Application {
       ApplicationState appState = app.getApplicationState();
       switch (appState) {
       case RUNNING:
+        // 应用程序提交后app是RUNNING状态，这里向调度器发送 ContainerEventType.INIT_CONTAINER 事件
         app.dispatcher.getEventHandler().handle(new ContainerInitEvent(
             container.getContainerId()));
         break;

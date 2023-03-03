@@ -233,6 +233,7 @@ public class ContainerManagerImpl extends CompositeService implements
     dispatcher.register(LocalizationEventType.class, rsrcLocalizationSrvc);
     dispatcher.register(AuxServicesEventType.class, auxiliaryServices);
     dispatcher.register(ContainersMonitorEventType.class, containersMonitor);
+    // ContainersLauncherEventType 事件类的注册方法
     dispatcher.register(ContainersLauncherEventType.class, containersLauncher);
     
     addService(dispatcher);
@@ -874,6 +875,7 @@ public class ContainerManagerImpl extends CompositeService implements
       ContainerTokenIdentifier containerTokenIdentifier,
       StartContainerRequest request) throws YarnException, IOException {
 
+    // 先进行 Token 认证及 ContainerLaunchContext上下文初始化
     /*
      * 1) It should save the NMToken into NMTokenSecretManager. This is done
      * here instead of RPC layer because at the time of opening/authenticating
@@ -942,12 +944,14 @@ public class ContainerManagerImpl extends CompositeService implements
           + " already is running on this node!!");
     }
 
+    // 真正处理逻辑
     this.readLock.lock();
     try {
       if (!serviceStopped) {
         // Create the application
         Application application =
             new ApplicationImpl(dispatcher, user, applicationID, credentials, context);
+        // 应用程序的初始化，供后续 container 使用，这个逻辑只调用一次，通常由来自 ApplicationMaster 的第一个 container 完成
         if (null == context.getApplications().putIfAbsent(applicationID,
           application)) {
           LOG.info("Creating a new application reference for app " + applicationID);
@@ -958,6 +962,7 @@ public class ContainerManagerImpl extends CompositeService implements
           context.getNMStateStore().storeApplication(applicationID,
               buildAppProto(applicationID, user, credentials, appAcls,
                 logAggregationContext));
+          // 1. 发送事件 ApplicationEventType.INIT_APPLICATION（资源本地化）
           dispatcher.getEventHandler().handle(
             new ApplicationInitEvent(applicationID, appAcls,
               logAggregationContext));
@@ -965,6 +970,7 @@ public class ContainerManagerImpl extends CompositeService implements
 
         this.context.getNMStateStore().storeContainer(containerId,
             containerTokenIdentifier.getVersion(), request);
+        // 2. 发送事件 ApplicationEventType.INIT_CONTAINER（启动和运行 Container）
         dispatcher.getEventHandler().handle(
           new ApplicationContainerInitEvent(container));
 
